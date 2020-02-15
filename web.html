@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+     <meta charset="UTF-8">
+     <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/2.6.11/vue.min.js"></script>
+     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous"> 
+      <?!= HtmlService.createHtmlOutputFromFile('css').getContent(); ?>
+</head>
+<body>
+   <div id="app" class="container" style='margin-bottom: 8em'>
+        <h3 class='text-center'>Сбор статистики по клиентам ВГ (копия)</h3>
+        <div class="mt-1">
+           <ul> 
+              <li>Список последних добавленных в Bitrix контактов обновляется каждые 7 секунд</li> 
+              <li>Если данные последних контактов не совпадают с клиентом, то воспользуйтесь поиском</li> 
+           </ul>
+        </div>
+        <div class="alert text-center alert-flash" :class="'alert-' + flashLevel" v-if="flashShow" v-text="flashMessage" style="z-index: 1000"></div>
+        <hr>
+        <div class = 'row'>
+            <div class='col-md-9'>
+               <h5>Последние контакты Bitrix:</h5>
+               <contact-data-as-table :data="lastContacts"></contact-data-as-table>
+            </div>          
+            <div class="col-md-3">
+               <h5>Поиск по фамилии:</h5>
+               <div class="input-group mb-2">
+                  <input type="text" class="form-control" placeholder="Введите фамилию" v-model="contactName">
+                  <div class="input-group-append">
+                     <button class="btn btn-outline-secondary" @click="searchContactsByName">Найти</button>
+                  </div>
+               </div>
+                <h5>Поиск по телефону:</h5>
+               <div class="input-group">
+                  <input type="number" class="form-control" placeholder="В формате 7921..." v-model="contactPhone">
+                  <div class="input-group-append">
+                     <button class="btn btn-outline-secondary" @click="searchContactsByPhone">Найти</button>
+                  </div>
+               </div>
+            </div>
+        </div>
+        <div class="ml-4 mt-2">
+             <button class="btn btn-primary mb-2" @click="addNewContact">Добавить новый контакт</button>
+             <add-contact-block v-if="showAddContactBlock"></add-contact-block>
+        </div>
+         
+        <div class="mt-2" v-if="showFoundContactsBlock">
+             <h6> Найденные контакты: </h6>
+             <div>
+                 <contact-data-as-table :data="foundContacts"></contact-data-as-table>
+             </div>
+        </div>
+        <div class="mt-2 ml-2" v-if="showSelectedContactInfo" id="selected-contact-block">
+              <h5 style='color:green; font-weight:bold'> Выбранный контакт: </h5>
+              <div class="card w-50">
+                   <div class="card-header">
+                      Имя: <strong>{{selectedContact.name}}</strong>
+                   </div>
+                <ul class="list-group list-group-flush">
+                   <li class="list-group-item">ID: {{selectedContact.id}}</li>
+                   <li class="list-group-item">Телефон: {{selectedContact.phone}}</li>
+                   <li class="list-group-item">Парк: {{selectedContact.park}}</li>
+                   <li class="list-group-item">Источник: {{selectedContact.source}}</li>
+                </ul>
+              </div>
+              <div class="mt-2">
+                 <h6> Выберите источник контакта: </h6>
+                 <source-list :list='contactSources'></source-list>
+              </div>
+        </div>
+         
+        <hr>
+        
+        <div class="row mt-2 mb-2">
+              <div class="col-md-9" >
+                  <div id="productSearch" class="mt-2">
+                       <product-search :list='products' :products='commonProducts'></product-search>
+                  </div>
+               
+                  <div v-if="showSelectedProductsBlock">
+                        <h5 style='color:#5bc0de; font-weight:bold'>Выбранные товары:</h5>
+                        <selected-products :list='selectedProducts'></selected-products>
+                  </div>
+                  <clients-quantity></clients-quantity>
+              </div>
+              <div class="col-md-3">
+                    <h5>Последний чек:</h5>
+                    <div class="form-group ">
+                      <select class="form-control" @change="changePosterSpot($event)">\
+                        <option value="" disabled selected>Выберите филиал</option>
+                        <option value=1>ВГ ПЛ</option>\
+                        <option value=3>ВГ ГК</option>\
+                        <option value=2>Зебратут</option>\
+                      </select>
+                    </div>
+                    <div v-if="lastTransaction.spot">
+                        <ul class="list-group mb-2">
+                           <li class="list-group-item active" v-if="lastTransaction.spot">{{lastTransaction.spot}}</li>
+                           <li class="list-group-item" v-for="product in lastTransaction.products">{{product.num}} x {{product.name}} = {{product.price}} руб.</li>
+                        </ul>
+                        <button class='btn btn-outline-primary' @click="addLastTransactionProducts">Добавить</button>
+                    </div>
+              </div>
+       </div>
+         
+        <div class="mt-4 mb-4 text-center" v-if="showSendBtn">
+            <button class='btn btn-primary btn-lg w-75' @click='sendDataToServer':disabled = 'disabledSendButton' >Отправить</button>
+        </div>        
+  </div>
+</body>
+
+<?!= HtmlService.createHtmlOutputFromFile('js').getContent(); ?>
+
+</html>

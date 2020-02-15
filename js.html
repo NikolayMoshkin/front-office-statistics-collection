@@ -1,0 +1,496 @@
+<script>
+
+document.addEventListener("DOMContentLoaded",getDataFromServer);
+
+function getDataFromServer(){
+   console.log('start')
+   
+   function glc(){
+     google.script.run.withSuccessHandler(setLastContactsData).getLastContacts();
+   };
+   glc();
+   setInterval(glc, 7000);
+   google.script.run.withSuccessHandler(setInitialProductsData).getAllProducts();
+   google.script.run.withSuccessHandler(setInitialCommonProductsData).getCommonProducts();
+   google.script.run.withSuccessHandler(setContactSourcesData).getContactSources();
+
+}
+
+function getLastTransactionFromSpot(spot_id){
+  function glt(){
+      google.script.run.withSuccessHandler(setLastTransaction).getLastTransactionProducts(spot_id);
+   };
+  glt();
+  var intervalFunctionLink= setInterval(glt, 7000);
+  return intervalFunctionLink
+}
+
+function stopInterval(intervalName) {
+  clearInterval(intervalName);
+}
+
+
+function setInitialProductsData(products){
+    app.products = products;
+    console.log('products ready');
+}
+function setLastContactsData(contacts){
+    app.lastContacts = contacts;
+}
+function setContactSourcesData(sources){
+    app.contactSources = sources;
+}
+function setInitialCommonProductsData(commonProducts){
+    app.commonProducts = commonProducts;
+}
+function setLastTransaction(transaction){
+    if (transaction.status){
+      console.log(transaction);
+      app.lastTransaction = transaction;
+    }
+    else
+      app.flash({'message': 'Сегодня чеков еще нет'});
+}
+
+Vue.component('contact-data-as-table', {
+    props: ["data"],
+    data: function () {
+         return {
+             selectedContact: {}
+         }
+    },
+    methods:{
+       selectContact: function(event){
+         app.showFoundContactsBlock =  false;
+         app.showAddContactBlock =  false; 
+
+         var eventChildren = event.target.parentElement.children;
+        
+         app.selectedContact = {
+             "id" : eventChildren[0].textContent,
+             "name" : eventChildren[2].textContent,
+             "phone" : eventChildren[3].textContent, 
+             "park" : eventChildren[4].textContent,
+             "source" : eventChildren[5].textContent,
+         }
+
+         console.log(app.selectedContact);
+         document.location = '#selected-contact-block';
+       }
+    },
+    template:  '<table class="table table-hover table-sm">\
+                    <thead class="thead-light">\
+                        <tr>\
+                            <th scope="col">ID</th>\
+                            <th scope="col">Добавлен</th>\
+                            <th scope="col">Имя</th>\
+                            <th scope="col">Телефон</th>\
+                            <th scope="col">Парк</th>\
+                            <th scope="col">Источник</th>\
+                        </tr>\
+                  </thead>\
+                  <tbody>\
+                    <tr v-for="element in data" class="contact-select" @click="selectContact">\
+                        <td scope="row"><small class="text-secondary">{{element.id}}</small></td>\
+                        <td><small class="text-secondary">{{element.dateDiff}}</small></td>\
+                        <th>{{element.name}}</th>\
+                        <td>{{element.phone}}</td>\
+                        <td>{{element.park}}</td>\
+                        <td>{{element.source}}</td>\
+                    </tr>\
+                  </tbody>\
+                </table>'
+           
+});
+
+Vue.component('source-list', {
+    props: ["list"],
+    
+    methods:{
+      selectContactSource: function(element){
+      
+        var el = document.getElementById("source_input");
+        
+        var statusId = null;
+        
+        for (var i in app.contactSources){
+            if (el.value == app.contactSources[i].NAME)
+               statusId = app.contactSources[i].STATUS_ID;
+        }
+        
+        var selectedSourceData = {
+               "name" : el.value,
+               "status_id" : statusId
+        };
+        
+        app.selectedContact.newSource = selectedSourceData;
+        console.log(app.selectedContact);
+       }
+     },
+    
+     template: '<div class="form-group w-50">\
+                  <input type="search" class="form-control" list="sources" id="source_input" @change="selectContactSource">\
+                  <datalist id="sources">\
+                     <option v-for="element in list" :value="element.NAME" @click="element.STATUS_ID">\
+                     </option>\
+                  </datalist>\
+                </div>'
+});
+
+Vue.component('product-search', {
+    props: ["list", "products"],
+    
+    methods:{
+       addProduct: function(){
+         var productName = document.getElementById("product_input").value;
+         console.log(productName);
+         for (var i in app.products){
+            if (app.products[i].name == productName){
+              app.products[i].quantity = 1;
+              app.selectedProducts.push(app.products[i]);
+              break;
+            }
+         }
+         document.getElementById("product_input").value = null;
+        
+      },
+      
+      addCommonProduct: function(event){
+         var productName = event.target.textContent;
+         for (var i in app.products){
+            if (app.products[i].name == productName){
+              app.products[i].quantity = 1;
+              app.selectedProducts.push(app.products[i]);
+              break;
+            }
+         }
+         console.log(app.selectedProducts);
+      }
+    },
+    
+    template: '<div>\
+                 <h5>Популярные товары:</h5>\
+                 <div class="btn-group" role="group">\
+                     <a v-for="product in products" href="#selected-products-block" class="btn btn-outline-info" v-text="product" @click="addCommonProduct"></a>\
+                 </div>\
+                 <h5 class="mt-2">Поиск по товарам:</h5>\
+                 <div class="form-group">\
+                     <input type="search" class="form-control" list="products" id="product_input" @change="addProduct">\
+                     <datalist id="products">\
+                        <option v-for="element in list" :value="element.name" v-text="element.price" :data-product-id="element.id" :data-product-name="element.name" :data-product-price="element.price">\
+                        </option>\
+                     </datalist>\
+                 </div>\
+              </div>'
+});
+
+
+Vue.component('selected-products', {
+    props: ["list"],
+    methods:{
+       removeElement: function(event){
+           event.preventDefault();
+           var elementToRemove = event.target.parentElement.parentElement;
+           var productToRemoveID = elementToRemove.children[0].textContent;
+           
+           
+           for (var i in app.selectedProducts){
+             if (app.selectedProducts[i].id == productToRemoveID){            
+                app.selectedProducts.splice(i, 1);
+                break;
+               }
+           }
+           
+//           if (app.selectedProducts == false)
+//             app.showSelectedProductsBlock = false;
+       },
+       
+       changeProductQuantity: function(event){
+          var newProductAmount = event.target.value;
+          var productToChangeName = event.target.parentElement.parentElement.id;
+          for (var i in app.selectedProducts){
+             if (app.selectedProducts[i].name == productToChangeName){
+                app.selectedProducts[i].quantity = newProductAmount;
+             }
+          }
+          console.log(app.selectedProducts);
+       }
+    },
+    template:  '<table class="table" id="selected-products-block">\
+                    <thead class="thead-light">\
+                        <tr>\
+                            <th scope="col">ID</th>\
+                            <th scope="col">Имя</th>\
+                            <th scope="col">Стоимость</th>\
+                            <th scope="col" style="width: 15%">Кол-во</th>\
+                            <th scope="col">Действия</th>\
+                        </tr>\
+                  </thead>\
+                  <tbody>\
+                    <tr :id = "element.name" v-for="element in list">\
+                        <th scope="row">{{element.id}}</th>\
+                        <td>{{element.name}}</td>\
+                        <td>{{element.price}}</td>\
+                        <td><input type="number" class="form-control" min="1" :value="element.quantity" @change="changeProductQuantity"></td>\
+                        <td><a @click="removeElement" href="#">Удалить</a></td>\
+                    </tr>\
+                  </tbody>\
+                </table>'
+});
+
+Vue.component('clients-quantity', {
+    created: function () {
+    },
+    
+    methods:{
+       changeClientsCount: function(event){
+           app.customerQuantity = parseInt(event.target.value);
+       }
+    },
+
+    template: '<div class="input-group mb-2">\
+                 <input type="number" min="0" value="1" class="form-control" @change="changeClientsCount" style="text-align: center">\
+                 <div class="input-group-append">\
+                 <span class="input-group-text">Кол-во человек</span>\
+              </div>'
+ });
+ 
+Vue.component('add-contact-block', {
+
+   data: function () {
+         return {
+             contactSources: app.contactSources,
+             hasKids: false,
+             kids: [1],
+         }
+    },
+    
+    created: function () {
+       app.selectedContact = {};
+    },
+    
+    methods:{
+       addKid: function(){   
+            this.kids.push(this.kids.length+1);
+       },
+       
+       checkKids: function(event){
+           this.hasKids = event.target.options[event.target.selectedIndex].value == 1 ? true: false;
+       },
+       
+       contactUpdate: function(event){
+          app.selectedContact.newContact = true;
+          var obj = app.selectedContact;
+          Vue.set(obj, event.target.id, event.target.value);
+          console.log(obj);
+       }
+    },
+    
+   provide: function () {
+      return {
+         contactUpdate: this.contactUpdate
+     }
+  },
+
+  template: '<div>\
+               <form>\
+                 <div class="form-row">\
+                    <div class="col-md-4 mb-3">\
+                      <label for="surname">Фамилия</label>\
+                      <input type="text" class="form-control" id="surname" placeholder="Введите фамилию клиента" @change="contactUpdate($event)">\
+                    </div>\
+                    <div class="col-md-4 mb-3">\
+                      <label for="name">Имя</label>\
+                      <input type="text" class="form-control" id="name" placeholder="Введите имя клиента" @change="contactUpdate($event)">\
+                    </div>\
+                 </div>\
+                 <div class="form-row">\
+                    <div class="col-md-4 mb-3">\
+                      <label for="phone">Телефон</label>\
+                      <input type="phone" class="form-control" id="phone" placeholder="В формате 7921..." @change="contactUpdate($event)">\
+                    </div>\
+                    <div class="col-md-4 mb-3">\
+                      <label for="email">Email</label>\
+                      <input type="email" class="form-control" id="email" placeholder="Введите email" @change="contactUpdate($event)">\
+                    </div>\
+                 </div>\
+                 <label>Выберите источник</label>\
+                  <source-list :list="contactSources"></source-list>\
+                 <div class="form-group w-50">\
+                      <label for="hasKids">Пришли с детьми?</label>\
+                      <select class="form-control" id="hasKids" @change="checkKids($event)">\
+                        <option value=null>Не выбрано</option>\
+                        <option value=1>С детьми</option>\
+                        <option value=null>Без детей</option>\
+                      </select>\
+                  </div>\
+                  <div class="ml-2" v-if="hasKids" id="kidsBlock">\
+                     <kid-info v-for="kid in kids" :value ="kid"></kid-info>\
+                     <div style="cursor:pointer; color:#2067b0" @click="addKid">\
+                           Добавить ребенка ✚\
+                     </div>\
+                  </div>\
+                </form>\
+            </div>'
+});
+
+Vue.component('kid-info', { 
+    props: ["value"],
+    inject: ['contactUpdate'],
+    methods:{
+    },
+
+    template: '<div class="form-row">\
+                  <div class="col-md-4 mb-3">\
+                       <label for="kidName">Имя ребенка {{value}}</label>\
+                       <input type="text" class="form-control" :id="`kidName${value}`" placeholder="Введите имя ребенка" @change="contactUpdate($event)">\
+                  </div>\
+                  <div class="col-md-4 mb-3">\
+                       <label for="kidBD">Дата рождения ребенка {{value}}</label>\
+                       <input type="date" class="form-control" :id="`kidBD${value}`" @change="contactUpdate($event)">\
+                  </div>\
+               </div>'
+
+ });
+
+var app = new Vue({ 
+    el: '#app',
+    data: {
+        lastContacts: [],
+        products: [],
+        commonProducts: [],
+        contactSources:[],
+        lastTransaction:{},
+        intervalFunctionLink: null,
+        contactName: '',
+        contactId: null,
+        contactPhone: '',
+        foundContacts: [],
+        showAddContactBlock: false,
+        showFoundContactsBlock: false,
+        selectedContact: {},
+        customerQuantity: 1,
+        selectedProducts:[],
+        flashShow: false,
+        flashMessage: '',
+        flashLevel: '',
+        disabledSendButton: false,
+    },
+    
+    computed:{
+      showSendBtn: function () {
+           return ((Object.keys(this.selectedContact).length !== 0) && (this.selectedProducts != false))
+      },
+      showSelectedProductsBlock: function(){
+           return (this.selectedProducts.length !== 0)
+      },
+      showSelectedContactInfo: function(){
+           return (Object.keys(this.selectedContact).length !== 0)
+      },
+    },
+    
+    methods:{
+        addNewContact: function(){
+          this.showAddContactBlock = !this.showAddContactBlock;
+          this.showSelectedContactInfo = false;
+          this.selectedContact = {};
+        },
+        changePosterSpot: function(event){
+          this.intervalFunctionLink && clearInterval(this.intervalFunctionLink);
+          this.intervalFunctionLink = getLastTransactionFromSpot(event.target.value);
+        },
+        addLastTransactionProducts: function(){
+          var productId = null;
+          var products = this.lastTransaction.products;
+          var productFoundMarker;
+          var transProductName;
+          var bitrixProductName;
+          
+          for (var i in products){
+             transProductName = products[i].name.replace( /\./g, "" )
+             
+             productFoundMarker = false;
+             
+             for (var j in this.products){
+               bitrixProductName = this.products[j].name.replace( /\./g, "" );
+               
+               if (bitrixProductName.match(transProductName)){
+                 productId = this.products[j].id;
+                 this.selectedProducts.push({
+                   'id' : productId,
+                   'name' : this.products[j].name,
+                   'price' : this.products[j].price,
+                   'quantity' : products[i].num,
+                 });
+                 productFoundMarker = true;
+                 break;
+               } 
+             }
+             
+             !productFoundMarker && this.flash({
+                                    'message': 'Товар ' + products[i].name + ' не найден. Воспользуйтесь поиском'
+                                   })
+          }
+          
+          console.log(app.selectedProducts)
+           
+        },
+        
+        searchContactsByName: function (){
+           this.showSelectedContactInfo = false;
+           this.showFoundContactsBlock =  false;
+           this.selectedContact = {};
+           console.log('Поиск по имени: ' + this.contactName);
+           google.script.run.withSuccessHandler(this.showFoundContactsData).searchContactsByName(this.contactName);   
+        },
+        
+        searchContactsByPhone: function(){
+          this.showSelectedContactInfo = false;
+          this.showFoundContactsBlock =  false;
+          this.selectedContact = {};
+          google.script.run.withSuccessHandler(this.showFoundContactsData).searchContactsByPhone(this.contactPhone);
+        },
+        
+        showFoundContactsData: function (response){
+          console.log(response);
+          if (response.status){
+            this.foundContacts = response.message;
+            this.showFoundContactsBlock = true;
+          }
+          else{
+            this.flash(response)
+          }
+        },
+        
+        sendDataToServer: function(){
+          this.disabledSendButton = true;
+          console.log([this.selectedContact, this.selectedProducts, this.customerQuantity]);
+          google.script.run.withSuccessHandler(this.reload).newRecord([this.selectedContact, this.selectedProducts, this.customerQuantity]);
+        },
+        
+        reload: function(response){
+               this.selectedContact = {};
+               this.selectedProducts.length = 0; 
+               this.showAddContactBlock = false;
+               this.disabledSendButton = false;
+               this.flash(response);
+        },
+        
+        flash: function(response){
+              console.log(response);
+              if (response.status)
+                this.flashLevel = 'success';
+              else
+                this.flashLevel = 'danger';
+                
+              this.flashShow = true;
+              this.flashMessage = response.message;
+              setTimeout(function(){ app.flashShow = false}, 3000);
+        }
+    }
+    
+});
+
+
+
+</script>
